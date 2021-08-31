@@ -1,32 +1,14 @@
 // Spartan-6 FPGA code for the AESOP tracker board.
 // Robert P. Johnson    June 29, 2015
-//
-// Reading registers: only 1 board may be addressed, no wildcard.  
-//
-// V20 Added TOT output for calibration.  March 14, 2016
-// V23 Added trigger command.  April 1, 2016
-// V24 Added notification of trigger via UART.  April 13, 2016
-// V25 Added debugging output.  May 12, 2016
-// V27 Try to make calibration events work with more than one layer in the system.  May 28, 2016
-// V35 Added ASIC auto initialization
-// V38 Protect against read commands being sent with no prior trigger.  August 3, 2016
-// V46 Added timeout in the trigger logic
-// V47 Initialize ASICs automatically whenever an ASIC reset occurs, and force Trigger to be 1 clock cycle long.  November 1, 2016
-// V49 Added a board identifier that can be read back, to verify programming of the ASIC default configuration.  November 23, 2016
-// V50 Modified FPGA and ASIC defaults per Brian's suggestions.  January 5, 2017
-// V51 Major revision to triggering to add TrigSrc=4, which waits for a GO following a tracker internal trigger. January 29, 2017
-// V52 Added the redundant trigger and trigger word.  February 9, 2017
-// V65 Communication of buffer status from all layers to make trigger source 4 operation work
-// V76 First version in which trigger source 4 operation works without hanging
-// V77 Add 3 zeroes at the beginning of the FPGA data header
-// V78 Add measurement of the internal single-layer trigger rate
-// V79 Modify default settings
-// V80 Remove timeouts in the trigger state machine
-// V81 Add choice (command x6E) for what trigger to count (for debugging work)
-// V82 Change board not used in trigger to be address 5 (last in bending plane)
-// V85 Hold the trigger information for an additional clock cycle so that it is never missed by the latch
-// V86 Modified the Master only to save the trigger information before the trigger delay is implemented
-// V87 Increased ASIC I/O current to setting-3 and modified timing to receive ASIC data in FPGA (inverted clock)
+// New version for 8 boards, with no wild-card address
+// For AESOP-Lite-2 we can remove the AESOP-1 trigger mode (TrigSrc=4), but initially at least it is still there.
+// The AESIO-Lite-2 trigger will come directly as the GO signal, with no tracker trigger needed (TrigSrc=0).
+// The tracker trigger primitives will go to the trigger processor to be used (or not).
+
+// V87 Increased ASIC I/O current to setting-3 and modified timing to receive ASIC data in FPGA (inverted clock instead of IODELAY2)
+// V88 Initial implementation for 8 boards
+// V89 Fixed bug in the state machine that saves the two trigger bits!  3/18/21
+// V90 Fixed code to use all 4 lsb of NTkrLyr. The previous version was not working with 8 layers.
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
@@ -40,7 +22,7 @@ input RxD_data_ready;       // Signal that a byte of data is available in RxD_da
 input [7:0] RxD_data;       // Byte of incoming data from the UART
 input TrigExt;              // Trigger signal received from the experiment trigger logic and clock aligned.
                             // For slave boards it is received from the previous board.
-output TrigNextLyr;         // Trigger acknowlege going out to the next board up
+output TrigNextLyr;         // Trigger acknowledge going out to the next board up
 input ResetExt;             // 1-Clock cycle reset signal, affects only the command decoder (not used, except in simulation)
 input [3:0] BrdAddress;     // bits 2:0 are address of this tracker board, bit 3 indicates master         
 output ASICpower;           // Power on/off for the ASIC analog section
@@ -64,7 +46,7 @@ output SCLen;                // enable for SCLout
 output Debug1, Debug2, Debug3, Debug4;
 input  Debug5, Debug6;
 
-parameter [7:0] Version = 8'd87;  // !!!Check whether the ASIC initialization routine is engaged!!!!
+parameter [7:0] Version = 8'd90;  // !!!Check whether the ASIC initialization routine is engaged!!!!
 
 reg TxD_start;
 reg [7:0] TxD_data;
@@ -136,7 +118,7 @@ reg [15:0] CmdCount;
 
 // Make sure the inputs of the top board are not undefined
 reg DataIn, TrigPrimInSafe;
-always @ (DataIn1 or TrigPrimIn1 or TrgLogic or BrdAddress or NTkrLyr or endStatus) begin
+always @ (DataIn1 or TrigPrimIn1 or TrgLogic or BrdAddress or MxLyr or endStatus) begin
     if (endStatus) begin
         if (TrgLogic) begin
             TrigPrimInSafe = 1'b0;   // OR logic
@@ -146,7 +128,7 @@ always @ (DataIn1 or TrigPrimIn1 or TrgLogic or BrdAddress or NTkrLyr or endStat
      end else begin
         TrigPrimInSafe = TrigPrimIn1;
      end
-    if (BrdAddress[2:0] == (NTkrLyr[2:0]-1)) begin
+    if (BrdAddress[2:0] == MxLyr) begin
         DataIn = 1'b0;
     end else begin
         DataIn = DataIn1;
@@ -178,8 +160,7 @@ reg [7:0] TrigDly;             // Global trigger delay, in clock cycles
 reg [7:0] TrigLen;             // Always set to unity now. Do not change.
 
 // Delay (from command x06) and clipping of the external trigger signal (GO signal)
-TrgStretch TrgStrchGLB(.Clock(SysCLK),.Reset(ResetLocal),.TReqIn(TrigExt),.TrgPls(TrigStrch),.TrgLen(TrigLen),.TrgDly(TrigDly),.Address(BrdAddress));
-assign GoSignal = TrigStrch; 
+TrgStretch TrgStrchGLB(.Clock(SysCLK),.Reset(ResetLocal),.TReqIn(TrigExt),.TrgPls(GoSignal),.TrgLen(TrigLen),.TrgDly(TrigDly),.Address(BrdAddress));
 
 // Clip the local trigger to one clock cycle and delay it by a programmed amount (from command x61) in just the master board (slaves should not use TrgPrmOutClip)
 TrgStretch TrgStrchLCL(.Clock(SysCLK), .Reset(ResetLocal), .TReqIn(TrigPrimOut), .TrgPls(TrgPrmOutClip), .TrgLen(TrigLen), .TrgDly(TrgDly), .Address(BrdAddress));
@@ -195,18 +176,18 @@ always @ (trgCntrChoice or TrgPrmOutClip or TrgStrch) begin
 end
 
 reg [7:0] TrigSrc;
-always @ (Master or TrigExt or trgEnable or TrigStrch or TrigSrc or TrgPrmOutClip) begin
+always @ (Master or TrigExt or trgEnable or GoSignal or TrigSrc or TrgPrmOutClip) begin
     if (Master) begin
-        if (TrigSrc == 0) Trigger = TrigStrch & trgEnable;
-        else if (TrigSrc == 1) Trigger = (TrigStrch & TrgPrmOutClip) & trgEnable;
-        else if (TrigSrc == 2) Trigger = (TrigStrch | TrgPrmOutClip) & trgEnable;
+        if (TrigSrc == 0) Trigger = GoSignal & trgEnable;
+        else if (TrigSrc == 1) Trigger = (GoSignal & TrgPrmOutClip) & trgEnable;
+        else if (TrigSrc == 2) Trigger = (GoSignal | TrgPrmOutClip) & trgEnable;
         else Trigger = TrgPrmOutClip & trgEnable;  // for TrigSrc==3 or TrigSrc==4
     end else begin
        Trigger = TrigExt & trgEnable;
     end  
 end
-always @ (TrigStrch or Master or BrdAddress) begin
-    if (Master) $display("%g\t AESOP_TKR %h: external trigger = %b",$time,BrdAddress,TrigStrch);
+always @ (GoSignal or Master or BrdAddress) begin
+    if (Master) $display("%g\t AESOP_TKR %h: external trigger = %b",$time,BrdAddress,GoSignal);
 end
 always @ (posedge TrigExt) if (Master) $display("%g\t AESOP_TKR master: raw external trigger received.",$time,BrdAddress);
 always @ (posedge Trigger) $display("%g\t AESOP_TKR %h: main trigger fires. TrigExt=%b, StateTg=%b",$time,BrdAddress,TrigExt,StateTg);
@@ -215,7 +196,7 @@ always @ (posedge Trigger) $display("%g\t AESOP_TKR %h: main trigger fires. Trig
 parameter [2:0] WaitTt = 3'b001;    // Wait for the trigger signal
 parameter [2:0] DoItTt = 3'b010;    // Wait for the trigger signal to go low again
 parameter [2:0] HoldTt = 3'b100;    // Hold the data until read out
-reg [1:0] StateTt, NextStateTt;
+reg [2:0] StateTt, NextStateTt;
 reg [1:0] TrgWord;
 reg TrigPrimIn1allOld;
 reg TrigPrimIn2Old;
@@ -224,12 +205,12 @@ always @ (StateTt or trgEnable or Master or TrigPrimOut or doneRdEvt or TrigSrc 
 	case (StateTt)
 	    WaitTt: begin
 		            if (Master & trgEnable & TrigPrimOut) NextStateTt = DoItTt;
-					else NextStateTt = WaitTt;
+					   else NextStateTt = WaitTt;
 		        end
 		DoItTt: begin
 		            if (TrigPrimOut) NextStateTt = DoItTt;
 					else begin
-					    if (TrigSrc == 3 || TrigSrc == 4) NextStateTt = HoldTt;
+					   if (TrigSrc == 3 || TrigSrc == 4) NextStateTt = HoldTt;
 						NextStateTt = WaitTt;
 					end
 		        end
@@ -468,10 +449,10 @@ always @ (posedge SysCLK) begin
                         CntGo <= CntGo + 1;
                         if (GoSignal) NMissedGo <= NMissedGo + 1;
                         if (Trigger) NMissedTg <= NMissedTg + 1;
-                        if (DataIn | NTkrLyr[2:0]==1) Both[1] <= 1'b1;   // Signal from the layer above
+                        if (DataIn | NTkrLyr[3:0]==1) Both[1] <= 1'b1;   // Signal from the layer above
                     end
             WtRdTg: begin   // Make sure that the ASICs are ready for another trigger before reenabling the trigger
-                        if (DataIn | NTkrLyr[2:0]==1) Both[1] <= 1'b1;
+                        if (DataIn | NTkrLyr[3:0]==1) Both[1] <= 1'b1;
                         if (!DmpPending) Both[0] <= 1'b1;
                         if (GoSignal) NMissedGo <= NMissedGo + 1;
                         if (Trigger) NMissedTg <= NMissedTg + 1;
@@ -563,9 +544,10 @@ end
 // This routine will send a sequence of commands to the ASICs to set their default register values following a reset
 reg GoInitialize;
 wire [7:0] BoardID;
-//assign DoneInit = 1'b1;   // TEMPORARY FOR DEBUGGING!!!!!!!!!!!!!!!! So simulations don't take forever.
+//assign DoneInit = 1'b1;   // TEMPORARY FOR DEBUGGING!!!!!!!!!!!!!!!! So simulations don't take forever. Use this line and the next for simulation.
 //TKRinitial InitializeASICS(.Clock(SysCLK), .Reset(ResetLocal), .Go(1'b0), .CMD(CMDinit), .Done(DoneDummy), .Version(BoardID));
 TKRinitial InitializeASICS(.Clock(SysCLK), .Reset(ResetLocal), .Go(GoInitialize), .CMD(CMDinit), .Done(DoneInit), .Version(BoardID));
+
 // State machine to receive the command stream and decode the commands sent to the Master board by the UART interface
 
 parameter [30:0] Wait = 31'b0000000000000000000000000000001;        // Wait for the first Byte of command data (address)
@@ -612,6 +594,7 @@ reg [7:0] CmdData[0:15];
 reg [4:0] ASICaddress;
 reg [2:0] ToTFPGA;
 reg [7:0] DatByte, NTkrLyr;
+reg [2:0] MxLyr;               // Maximum layer number; should be NtkrLyr-1
 reg DataFlg;
 reg StartRead;                 // Signal to start reading out event data 
 wire doneRdEvt;                // Signal that event readout has completed
@@ -640,10 +623,10 @@ assign doneRdReg = (StateRg == WtDnRg && NextStateRg == WaitRg);
 
 always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt or DMPDone or TOTdata or DataDone or ASICaddress or StrobeOutIna or i2cResults or CntEcho or TxD_busy or DatByte or DataFlg or CmdData[2]
                 or BrdAddress or Address or CmdCount or CmdEv or MstrDataEv or RxD_data_ready or CntTime or Command or doneRdEvt or Cnt or This or lenData or RxD_data 
-                or DoneInit or Ndata or doneRdReg or CmdIn or Master or CmdStrng or RegOutPut or All or DataIn or CntZ or ASICdataMSK or MergedData or CMDinit) begin
+                or DoneInit or Ndata or doneRdReg or CmdIn or Master or CmdStrng or RegOutPut or DataIn or CntZ or ASICdataMSK or MergedData or CMDinit or All) begin
     if (State == ACmd && (This | All)) CmdASIC = CmdStrng[74];
     else begin
-        if (State == ACfg && (This | All)) CmdASIC = CMDinit;  // Multiplex the command stream to the ASICs
+        if (State == ACfg) CmdASIC = CMDinit;  // Multiplex the command stream to the ASICs
         else if (StateTg == SnRdTg) CmdASIC = CmdRd[12];
         else CmdASIC = 1'b0;
     end
@@ -825,7 +808,7 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
               end
         Deco: begin                   // Command input complete; now decode the command
                   CmdRepeat = 1'b0;
-                  if ((This | All) && Command == 8'h02) begin
+                  if (Command == 8'h02) begin
                       if (Master) begin
                           if (ToTFPGA==BrdAddress[2:0]) DOutMux = TOTdata;
                           else DOutMux = DataIn;
@@ -843,8 +826,7 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                   TxD_dataEcho = 8'h3;
                   case (Command) 
                       8'h01:  begin     // Read Event:  wait until the event readout is complete; eventually go to passthrough mode if not addressed
-                                  if (This | All) NextState = ACmd;  // Immediately send the read commands to the ASICs
-                                  else NextState = Wait;     
+                                  NextState = ACmd;  // Immediately send the read commands to the ASICs
                               end
                       8'h02:  NextState = ACmd;
                       8'h06:  NextState = Scnd;
@@ -982,27 +964,23 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                   DataToMerge = 0;
                   TxD_dataEcho = 8'h3;
                   if (Master) begin
-                      if (This | All) begin 
-                          if (Command == 8'h02) begin
-                              if (ToTFPGA==BrdAddress[2:0]) DOutMux = TOTdata;
-                              else DOutMux = DataIn;
-                          end else begin
-                              if (This && (ASICaddress != 5'b11111)) DOutMux = ASICdataMSK[ASICaddress[3:0]];
-                              else DOutMux = DataIn;
-                          end
-                      end else DOutMux = DataIn;
+					  if (Command == 8'h02) begin
+						  if (ToTFPGA==BrdAddress[2:0]) DOutMux = TOTdata;
+						  else DOutMux = DataIn;
+					  end else begin
+						  if (This && (ASICaddress != 5'b11111)) DOutMux = ASICdataMSK[ASICaddress[3:0]];
+						  else DOutMux = DataIn;
+					  end
                       DataOut = 1'b0;
-                  end else begin
-                      if (This | All) begin 
-                         if (Command == 8'h02) begin
-                             if (ToTFPGA==BrdAddress[2:0]) DataOut = TOTdata;
-                             else DataOut = DataIn;
-                         end else begin
-                             if (This && (ASICaddress != 5'b11111)) DataOut = ASICdataMSK[ASICaddress[3:0]];
-                             else DataOut = DataIn;
-                         end
-                      end else DataOut = DataIn;
-                      DOutMux = 1'b0;
+                  end else begin 
+					 if (Command == 8'h02) begin
+						 if (ToTFPGA==BrdAddress[2:0]) DataOut = TOTdata;
+						 else DataOut = DataIn;
+					 end else begin
+						 if (This && (ASICaddress != 5'b11111)) DataOut = ASICdataMSK[ASICaddress[3:0]];
+						 else DataOut = DataIn;
+					 end
+				  DOutMux = 1'b0;
                   end
               end
         RdEv: begin
@@ -1046,7 +1024,7 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                       case (Command)
                           8'h01: if (Master) NextState = RdEv; else NextState = Wait;
                           8'h02: NextState = AsRg;
-                          8'h0C: if (All && (ASICaddress==5'b11111)) NextState = ACfg; else NextState = Wait; // For the ASIC soft reset, go on here to reload the registers with the defaults
+                          8'h0C: if (ASICaddress==5'b11111) NextState = ACfg; else NextState = Wait; // For the ASIC soft reset, go on here to reload the registers with the defaults
                           8'h20: NextState = AsRg;
                           8'h21: NextState = AsRg;
                           8'h22: NextState = AsRg;
@@ -1133,8 +1111,8 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
     endcase
 end
 
-assign All = (Address[2:0] == 7);  // Assume that the Master always has address 0, other boards 1 through 6
-assign This = (BrdAddress[2:0] == Address[2:0]);
+assign This = (BrdAddress[2:0] == Address[2:0]); // Assume that the Master always has address 0, other boards 1 through 7
+assign All = (Command == 8'h01 || Command == 8'h02 || Command == 8'h05 || Command == 8'h0C || Command == 8'h12);
 
 reg CalStrobe;
 reg FrstBt;
@@ -1149,7 +1127,7 @@ reg [7:0] errSel;
 reg [3:0] ErrorCode2;
 reg [7:0] SaveCmd;
 reg LclDmpEvt;
-reg SgnlDmp;             // Signal that the event deletion is complete for this layer and all layers acknowlege
+reg SgnlDmp;             // Signal that the event deletion is complete for this layer and all layers acknowledge
 reg [1:0] Cndn;          // Two conditions for event deletion to be complete for command 53
 reg [15:0] nEvSent;      // Count of events send down to the master
 reg [23:0] trgCntrTime;  // Clock counter for measuring the trigger OR rate
@@ -1166,21 +1144,23 @@ always @ (posedge SysCLK) begin
         ConfigReset <= 1'b0;
         TrigDly <= 8'd10;   // Global trigger delay, in clock cycles
         TrigLen <= 8'd1;   // Global trigger stretch, must always be set to 1!!!
-        TrigSrc <= 8'd4;   // Default trigger is internal with wait for GO
+        TrigSrc <= 8'd0;   // Default trigger is external
+		dualTrig <= 1'b0;  // Master will not receive both triggers (they go to PSOC)  
         ASICpower <= 1'b0; // ASIC power is off at startup
         ResetLocal <= 1'b1;
         RegOut <= 1'b0;
         StartRead <= 1'b0;
         ASICmask <= 12'b111111111111;   // By default all of the ASICs are enabled
-        NTkrLyr <= 8'd7;                // The default system has 7 layers
+        NTkrLyr <= 8'd8;                // The default system has 8 layers
+		MxLyr <= NTkrLyr - 1;
         TrgLen <= 8'h7;      // Length of the output trigger primitive, in clock cycles
         TrgDly <= 8'h1;      // Delay of the internal trigger
 		trgCntrChoice <= 1'b0;    
-        if (BrdAddress != 4'h5) TrgMask <= 1'b1;
+        if (BrdAddress != 4'h6 && BrdAddress != 4'h1) TrgMask <= 1'b1;  //Boards 1 and 6 on the bending side are not included in the trigger coincidence
 		else TrgMask <= 1'b0;
         TrgLogic <= 1'b0;    // Default to AND logic for the output trigger primitive
         trgEnable <= 1'b0;   // The trigger is disabled at startup
-        if (BrdAddress == 4'h5 || BrdAddress == 4'h6) endStatus <= 1'b1;
+        if (BrdAddress == 4'h6 || BrdAddress == 4'h7) endStatus <= 1'b1; //**** need to fix for new trigger scheme!!
         else endStatus <= 1'b0;
         cntError1 <= 0;
         cntError2 <= 0;
@@ -1192,7 +1172,6 @@ always @ (posedge SysCLK) begin
         ToTFPGA <= 3'b000;
         LclDmpEvt <= 1'b0;
         MxWaitGO <= 45;
-        dualTrig <= 1'b1;
         CntDump2 <= 0;
         nEvent <= 0;
 		ErrorCode2[3:0] <= 0;
@@ -1336,13 +1315,13 @@ always @ (posedge SysCLK) begin
                           if (CntEcho == 5) begin
                               case (Command)
                                   8'h03:  begin
-                                              if (This | All) begin
+                                              if (This) begin
                                                   ConfigReset <= 1'b1;
                                                   $display("%g\t AESOP_TKR %d:  FPGA configuration reset",$time,BrdAddress);
                                               end
                                           end
                                   8'h04:  begin
-                                              if (This | All) begin
+                                              if (This) begin
                                                   ResetLocal <= 1'b1;
                                                   $display("%g\t AESOP_TKR %d:  FPGA logic reset",$time,BrdAddress);
                                               end
@@ -1352,7 +1331,7 @@ always @ (posedge SysCLK) begin
                                           end
                                   8'h26:  begin
                                               GoInitialize <= 1'b1;
-                                              //if (This | All) $display("%g\t AESOP_TKR: CmdASIC=%b State=%b GoInitialize=%b",$time,CmdASIC,State,GoInitialize);
+                                              //if (This) $display("%g\t AESOP_TKR: CmdASIC=%b State=%b GoInitialize=%b",$time,CmdASIC,State,GoInitialize);
                                           end
                               endcase
                           end
@@ -1372,61 +1351,43 @@ always @ (posedge SysCLK) begin
                       CmdCount <= CmdCount + 1;
                       CntEcho <= 0;
                       FrstBt <= 1'b0;
-                      if (Address>7) cntError9 <= cntError9 + 1;
+                      if (Address>4'h7) cntError9 <= cntError9 + 1;
                       case (Command) 
-                          8'h01:  begin    // Read Event Command
-                                      if (This | All) begin
-                                          $display("%g\t AESOP_TKR %h: Read event command received. Data=%b, Tag=%b",$time,BrdAddress,CmdData[0],TrgTag);
-                                          nEvent <= nEvent + 1;
-                                          if (CmdData[0] == 0) begin   // Read a real event
-                                              if (!readoutPending) cntError3 <= cntError3 + 1;
-                                              CmdStrng <= {10'b1111110010,TrgTag[0]^TrgTag[1],TrgTag,62'd0};
-                                          end else begin               // Read a calibration event
-                                              CmdStrng <= {10'b1111110010,ASICaddress[0]^ASICaddress[1],ASICaddress[1:0],62'd0};
-                                          end                                                        
-                                      end else begin
-                                          $display("%g\t AESOP_TKR %d:  Read event command encountered but not addressed.",$time,BrdAddress);
-                                      end
+                          8'h01:  begin    // Read Event Command, assumed always to apply to all boards
+									  $display("%g\t AESOP_TKR %h: Read event command received. Data=%b, Tag=%b",$time,BrdAddress,CmdData[0],TrgTag);
+									  nEvent <= nEvent + 1;
+									  if (CmdData[0] == 0) begin   // Read a real event
+										  if (!readoutPending) cntError3 <= cntError3 + 1;
+										  CmdStrng <= {10'b1111110010,TrgTag[0]^TrgTag[1],TrgTag,62'd0};
+									  end else begin               // Read a calibration event
+										  CmdStrng <= {10'b1111110010,ASICaddress[0]^ASICaddress[1],ASICaddress[1:0],62'd0};
+									  end                                                        
                                       readCMDseen <= 1'b1;
                                   end
                           8'h02:  begin    // ASIC calibration strobe
-                                      if (This | All) begin
-                                          CalStrobe <= 1'b1;                                          
-                                          CmdStrng <= {1'b1,ASICaddress,4'b1111,~(Prty^ToTFPGA[0]^ToTFPGA[1]^ToTFPGA[2]),CmdData[1],56'd0};
-                                          $display("%g\t AESOP_TKR %d:  Calibration strobe for chip %h, setting=%b",$time,BrdAddress,ASICaddress,CmdData[1]);
-                                      end
+									  CalStrobe <= 1'b1;                                          
+									  CmdStrng <= {1'b1,ASICaddress,4'b1111,~(Prty^ToTFPGA[0]^ToTFPGA[1]^ToTFPGA[2]),CmdData[1],56'd0};
+									  $display("%g\t AESOP_TKR %d:  Calibration strobe for chip %h, setting=%b",$time,BrdAddress,ASICaddress,CmdData[1]);
                                   end
-                          8'h03:  begin
+                          8'h05:  begin  // Always reset all boards at the same time
+									  HardReset <= 1'b1;
+									  $display("%g\t AESOP_TKR:  Resetting the ASICs (hard reset)",$time);
                                   end
-                          8'h04:  begin
-                                  end
-                          8'h05:  begin
-                                      if (This | All) begin
-                                          HardReset <= 1'b1;
-                                          $display("%g\t AESOP_TKR %d:  Resetting the ASICs (hard reset)",$time,BrdAddress);
-                                      end
-                                  end
-                          8'h06:  begin
-                                      if (This | All) begin
-                                          TrigDly <= CmdData[0];
-                                          $display("%g\t AESOP_TKR %d:  Setting the trigger delay to %d",$time,BrdAddress,CmdData[0]);
-                                      end
+                          8'h06:  begin  // Always set the trigger delay the same for all boards
+									  TrigDly <= CmdData[0];
+									  $display("%g\t AESOP_TKR:  Setting the trigger delay to %d",$time,CmdData[0]);
                                   end
                           8'h07:  begin                                          
                                       RegData[1] <= 8'd3;
                                       lenData <= 4'd3;
                                   end
-                          8'h08:  begin
-                                      if (This | All) begin
-                                          ASICpower <= 1'b1;
-                                          $display("%g\t AESOP_TKR %d:  turning on the analog power to the ASICs",$time,BrdAddress);
-                                      end
+                          8'h08:  begin  // All ASICs get powered on or off together, on all boards
+									  ASICpower <= 1'b1;
+									  $display("%g\t AESOP_TKR %d:  turning on the analog power to the ASICs",$time,BrdAddress);
                                   end
                           8'h09:  begin
-                                      if (This | All) begin
-                                          ASICpower <= 1'b0;
-                                          $display("%g\t AESOP_TKR %d:  turning off the analog power to the ASICs",$time,BrdAddress);
-                                      end
+									  ASICpower <= 1'b0;
+									  $display("%g\t AESOP_TKR %d:  turning off the analog power to the ASICs",$time,BrdAddress);
                                   end
                           8'h0a:  begin
                                       RegData[1] <= 8'd2;
@@ -1437,10 +1398,8 @@ always @ (posedge SysCLK) begin
                                       lenData <= 4'd2;
                                   end
                           8'h0c:  begin
-                                      if (This | All) begin
-                                          CmdStrng <= {1'b1,ASICaddress,4'b0001,Prty,64'd0};
-                                          $display("%g\t AESOP_TKR %d:  send a soft RESET to ASIC address %h",$time,BrdAddress,ASICaddress);
-                                      end
+									  CmdStrng <= {1'b1,ASICaddress,4'b0001,Prty,64'd0};
+									  $display("%g\t AESOP_TKR %d:  send a soft RESET to ASIC address %h",$time,BrdAddress,ASICaddress);
                                   end
                           8'h0d:  begin
                                       if (Master & This) begin
@@ -1449,29 +1408,28 @@ always @ (posedge SysCLK) begin
                                       end
                                   end 
                           8'h0e:  begin
-                                      if (This | All) begin
+                                      if (This) begin
                                           ASICmask[11:8] <= CmdData[0];
                                       end
                                   end
-                          8'h0f:  begin
-                                      if (This | All) begin
-                                          NTkrLyr <= CmdData[0];
-                                          $display("%g\t AESOP_TKR %d:  setting the number of tracker layers to %d",$time,BrdAddress,CmdData[0]);
-                                      end
+                          8'h0f:  begin  // The number of tracker layers must be the set the same for all boards, so this is not addressed
+									  NTkrLyr <= CmdData[0];
+									  MxLyr <= NTkrLyr - 1;
+									  $display("%g\t AESOP_TKR %d:  setting the number of tracker layers to %d",$time,BrdAddress,CmdData[0]);
                                   end
                           8'h10:  begin
-                                      if (This | All) begin
+                                      if (This) begin
                                           CmdStrng <= {1'b1,ASICaddress,4'b1001,~Prty,CmdData[1],56'd0};
                                           $display("%g\t AESOP_TKR %d:  loading the Calibration DAC for ASIC %d with %b",$time,BrdAddress,ASICaddress,CmdData[1]);
                                       end
                                   end
                           8'h11:  begin
-                                      if (This | All) begin
+                                      if (This) begin
                                           CmdStrng <= {1'b1,ASICaddress,4'b1010,~Prty,CmdData[1],56'd0};
                                           $display("%g\t AESOP_TKR %d:  loading the Threshold DAC for ASIC %d with %b",$time,BrdAddress,ASICaddress,CmdData[1]);
                                       end                                          
                                   end
-                          8'h12:  begin
+                          8'h12:  begin  // All ASICs on all boards must be configured the same
                                       CmdStrng <= {1'b1,ASICaddress,4'b1011,Prty,CmdData[1],56'd0};
                                       $display("%g\t AESOP_TKR %d:  load ASIC configuration for ASIC %d with %b%b%b",$time,BrdAddress,ASICaddress,CmdData[1],CmdData[2],CmdData[3]);
                                   end
@@ -1514,7 +1472,7 @@ always @ (posedge SysCLK) begin
                                   end
                           8'h45:  begin          // Load an i2c register
                                       i2cAddr <= CmdData[0];
-                                      if (This | All) $display("%g\t AESOP_TKR %h: load i2c register for i2c address %b",$time,BrdAddress,CmdData[0]);
+                                      if (This) $display("%g\t AESOP_TKR %h: load i2c register for i2c address %b",$time,BrdAddress,CmdData[0]);
                                   end
                           8'h46:  begin
                                       i2cAddr <= CmdData[0];   // Read whatever i2c register is being pointed to
@@ -1549,11 +1507,9 @@ always @ (posedge SysCLK) begin
                                       RegData[1] <= 8'd2;
                                       lenData <= 4'd2;
                                   end         
-                          8'h56:  begin
-                                      if (This | All) begin
-                                          MxWaitGO <= CmdData[0];
-                                          $display("%g\t AESOP_TKR %h Set MxWaitGO to %d",$time,BrdAddress,CmdData[0]);
-                                      end    
+                          8'h56:  begin  // This will be set the same for all boards
+									  MxWaitGO <= CmdData[0];
+									  $display("%g\t AESOP_TKR %h Set MxWaitGO to %d",$time,BrdAddress,CmdData[0]);  
                                   end                                      
                           8'h57:  begin
                                       RegData[1] <= 8'd2;
@@ -1588,36 +1544,30 @@ always @ (posedge SysCLK) begin
                                       lenData <= 4'd3;
                                   end    
                           8'h61:  begin
-                                      if (This | All) begin
+                                      if (This) begin
                                           TrgLen <= CmdData[0];
                                       end
                                   end  
                           8'h62:  begin
-                                      if (This | All) begin
+                                      if (This) begin
                                           TrgMask <= CmdData[0];
                                           $display("%g\t AESOP_TKR %h Set trigger mask to %h",$time,BrdAddress,CmdData[0]);
                                       end
                                   end
-                          8'h63:  begin
-                                      if (This | All) begin
-                                          TrgLogic <= CmdData[0];
-                                          $display("%g\t AESOP_TKR %h Set trigger logic type to %h",$time,BrdAddress,CmdData[0]);
-                                      end
+                          8'h63:  begin  // The trigger logic should be the same for all boards
+									  TrgLogic <= CmdData[0];
+									  $display("%g\t AESOP_TKR: Set trigger logic type to %h",$time,CmdData[0]);
                                   end
                           8'h64:  begin
-                                      if (This | All) begin
-                                          TrigSrc <= CmdData[0];
-                                          $display("%g\t AESOP_TKR %h Set trigger source to %h",$time,BrdAddress,CmdData[0]);
-                                      end
+									  TrigSrc <= CmdData[0];
+									  $display("%g\t AESOP_TKR: Set trigger source to %h",$time,CmdData[0]);
                                   end           
                           8'h65:  begin
-                                      if (This | All) begin
-                                          trgEnable <= 1'b1;
-                                          $display("%g\t AESOP_TKR %h: enabling the trigger.",$time,BrdAddress);
-                                      end
+									  trgEnable <= 1'b1;
+									  $display("%g\t AESOP_TKR: enabling the trigger.",$time);
                                   end            
                           8'h66:  begin
-                                      if (This | All) trgEnable <= 1'b0;
+                                      trgEnable <= 1'b0;
                                   end                                    
                           8'h67:  begin
                                       randomTrig <= 1'b1;
@@ -1638,13 +1588,11 @@ always @ (posedge SysCLK) begin
                                       RegData[1] <= 8'd3;
                                       lenData <= 4'd3;
                                   end   
-						  8'h6C:  begin
-									  if (This | All) begin									  	
-										enableTrgCnt <= 1'b1;
-										if (!enableTrgCnt) begin
-											trgCntrTime <= 0;
-											trgCntr <= 0;
-										end
+						  8'h6C:  begin								  	
+									  enableTrgCnt <= 1'b1;
+									  if (!enableTrgCnt) begin
+										  trgCntrTime <= 0;
+										  trgCntr <= 0;
 									  end
 						          end
 						  8'h6D:  begin
@@ -1652,9 +1600,7 @@ always @ (posedge SysCLK) begin
 									  lenData <= 4'd3;
 						          end
 						  8'h6E:  begin
-						              if (This | All) begin
-                                          trgCntrChoice <= CmdData[0];
-                                      end
+                                      trgCntrChoice <= CmdData[0];
 						          end
                           8'h71:  begin
                                       RegData[1] <= 8'd3;
@@ -1692,7 +1638,7 @@ always @ (posedge SysCLK) begin
                   end
             Evcl: begin
                       LclDmpEvt <= 1'b0;
-                      if (DataIn | BrdAddress[2:0] == (NTkrLyr[2:0]-1)) begin
+                      if (DataIn | (BrdAddress[2:0] == MxLyr)) begin
                           Cndn[1] <= 1'b1;
                           if (!Cndn[1]) $display("%g\t AESOP_TKR %h: State Evcl, 2nd condition met, DataIn=%b, Cndn=%b",$time,BrdAddress,DataIn,Cndn);
                       end
@@ -1708,7 +1654,7 @@ always @ (posedge SysCLK) begin
                       CntTime <= CntTime + 1;
                       GoInitialize <= 1'b0;
                       if (CntTime == 24'hffffff) cntError2 <= cntError2 + 1;
-                      //if (This | All) $display("%g\t AESOP_TKR: CmdASIC=%b State=%b GoInitialize=%b",$time,CmdASIC,State,GoInitialize);
+                      //if (This) $display("%g\t AESOP_TKR: CmdASIC=%b State=%b GoInitialize=%b",$time,CmdASIC,State,GoInitialize);
                   end
             InaR: begin
                       if (StrobeOutIna) begin
@@ -1731,7 +1677,7 @@ always @ (posedge SysCLK) begin
                         7'd0: i2cData[23:16] <= CmdData[1];  
                         7'd1: i2cData[15:8] <= CmdData[2];
                         7'd2: i2cData[7:0] <= CmdData[3];
-                        7'd3: if (This | All) begin
+                        7'd3: if (This) begin
                                  StrobeIna <= 1'b1;
                                  $display("%g\t AESOP_TKR %h: send i2c command %b%b",$time,BrdAddress,i2cData[7:0],CmdData[2]);
                               end
@@ -1741,19 +1687,17 @@ always @ (posedge SysCLK) begin
             Scnd: begin
                       case (Command)
                           8'h06: begin
-                                     if (This | All) begin
-                                         TrigLen <= 8'd1;  //CmdData[1];
-                                         $display("%g\t AESOP_TKR %d:  setting the trigger stretch length to %d",$time,BrdAddress,CmdData[1]);
-                                     end
+									 TrigLen <= 8'd1;  //CmdData[1];
+									 $display("%g\t AESOP_TKR %d:  setting the trigger stretch length to %d",$time,BrdAddress,CmdData[1]);
                                  end
                           8'h0e: begin
-                                     if (This | All) begin
+                                     if (This) begin
                                          ASICmask[7:0] <= CmdData[1];
                                          $display("%g\t AESOP_TKR %d:  setting the ASIC mask to %b",$time,BrdAddress,{ASICmask[11:8],CmdData[1]});
                                      end
                                  end
                           8'h61: begin
-                                      if (This | All) begin
+                                      if (This) begin
                                           TrgDly <= CmdData[1];
                                           $display("%g\t AESOP_TKR %h Set trigger length to %d and trigger delay to %d",$time,BrdAddress,TrgLen,CmdData[1]);
                                       end
@@ -1798,7 +1742,7 @@ always @ (posedge SysCLK) begin
                       end else begin
                           FrstBt <= 1'b0;                          
                       end           
-                      if (NextState == ACfg && All && (ASICaddress==5'b11111)) GoInitialize <= 1'b1;                      
+                      if (NextState == ACfg && (ASICaddress==5'b11111)) GoInitialize <= 1'b1;                      
                   end
             RegT: begin
                       case (Cnt) 
@@ -1903,7 +1847,7 @@ always @ (posedge SysCLK) begin
                               8'h07: RegData[8] <= 8'h0f;
                               8'h1e: RegData[8] <= 8'h0f;
                               8'h58: RegData[8] <= 8'h0f;
-                              7'h5C: RegData[8] <= 8'h0f;
+                              8'h5C: RegData[8] <= 8'h0f;
                               8'h60: RegData[8] <= 8'h0f;
                               8'h68: RegData[8] <= 8'h0f;
                               8'h69: RegData[8] <= 8'h0f;
@@ -2030,7 +1974,7 @@ parameter [7:0] DoneEv = 8'b10000000;
 reg [7:0] StateEv, NextStateEv;
 reg [7:0] Ident;
 reg [6:0] CntEv;
-reg [2:0] CntLyr;
+reg [3:0] CntLyr;
 reg MstrDataEv, CmdEv, SendEvtLcl, FirstBit;
 reg [12:0] CmdOutEv;
 reg [7:0] TxD_dataEv;
@@ -2123,7 +2067,7 @@ always @ (StateEv or StateTg or Byte5 or DataDone or CntDlyEv or CntTmOut or Sen
         DMP2Ev: begin
                    MstrDataEv = 1'b0;
                    if (DMPDone || CntTmOut==24'hffffff) begin
-                       if (NTkrLyr == 1) NextStateEv = DoneEv;
+                       if (NTkrLyr[3:0] == 1) NextStateEv = DoneEv;
                        else NextStateEv = SendEv;
                    end else NextStateEv = DMP2Ev;
                    CmdEv = 1'b0;
@@ -2144,7 +2088,7 @@ always @ (StateEv or StateTg or Byte5 or DataDone or CntDlyEv or CntTmOut or Sen
         DMP3Ev: begin
                    MstrDataEv = 1'b0;
                    if (DMPDone || CntTmOut==24'hffffff) begin
-                       if (CntLyr == NTkrLyr) NextStateEv = DoneEv;
+                       if (CntLyr == NTkrLyr[3:0]) NextStateEv = DoneEv;
                        else NextStateEv = SendEv;
                    end else NextStateEv = DMP3Ev;
                    CmdEv = 1'b0;
@@ -2226,7 +2170,7 @@ always @ (posedge SysCLK) begin
                         CntTmOut <= CntTmOut + 1;
                         CntEv <= 0;
                         if (NextStateEv == SendEv) begin
-                            CmdOutEv <= {2'b10,CntLyr,8'b01010010};  // Command 52 to send to the next board up
+                            CmdOutEv <= {2'b10,CntLyr[2:0],8'b01010010};  // Command 52 to send to the next board up
                             CntTmOut <= 0;
                         end
                         if (CntTmOut==24'hffffff) begin
@@ -2255,7 +2199,7 @@ always @ (posedge SysCLK) begin
                         CntEv <= 0;
                         FirstBit <= 1'b0;
                         if (NextStateEv == SendEv) begin
-                            CmdOutEv <= {2'b10,CntLyr,8'b01010010};  // Command 52 to send to the next board up                        
+                            CmdOutEv <= {2'b10,CntLyr[2:0],8'b01010010};  // Command 52 to send to the next board up                        
                         end
                         if (CntTmOut==24'hffffff) begin
                             cntError4 <= cntError4 + 1;

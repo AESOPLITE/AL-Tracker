@@ -8,6 +8,7 @@
 // Set the trigger masks and raised some thresholds according to Brians scans  10/17/2017
 // Raised all of the thresholds to 5 times noise 12/4/2017
 // Final optimized thresholds and masks for flight  1/23/2018
+// Added F board values and increased the ASIC current drive  3/19/2020
 module TKRinitial(Clock, Reset, Go, CMD, Done, Version);
 
 input Clock;           // 10 MHz system clock
@@ -149,7 +150,8 @@ always @ (posedge Clock) begin
      State <= Wait;   
      ConFigReg <= 19'b1010111001000111000;   // All chips on all boards need to have the same configuration register setting
      PrtyCfg <= 1'b1;                        // Don't forget to set the parity bits when changing register defaults
-                                             // Each chip in general will have a different threshold DAC setting, for S/N optimization
+     
+	 // Each chip in general will have a different threshold DAC setting, for S/N optimization
      // Board A
 /*
      Version <= 8'h41;
@@ -231,9 +233,25 @@ always @ (posedge Clock) begin
      ThrDACa <= {1'b0,7'd23};
      ThrDACb <= {1'b0,7'd25};
      PrtyDAC <= 12'b101111111010; 
-*/     
+*/  
+     // Board F, from scan Feb_3_2020
+     Version <= 8'h46;
+     ThrDAC0 <= {1'b0,7'd24};                
+     ThrDAC1 <= {1'b0,7'd22};
+     ThrDAC2 <= {1'b0,7'd21};
+     ThrDAC3 <= {1'b0,7'd22};
+     ThrDAC4 <= {1'b0,7'd24};
+     ThrDAC5 <= {1'b0,7'd23};
+     ThrDAC6 <= {1'b0,7'd23};
+     ThrDAC7 <= {1'b0,7'd22};
+     ThrDAC8 <= {1'b0,7'd21};
+     ThrDAC9 <= {1'b0,7'd23};
+     ThrDACa <= {1'b0,7'd23};
+     ThrDACb <= {1'b0,7'd26};
+     PrtyDAC <= 12'b100100010111; 
+  
      // Board G
-     Version <= 8'h47;
+/*     Version <= 8'h47;
      ThrDAC0 <= {1'b0,7'd22};                
      ThrDAC1 <= {1'b0,7'd22};
      ThrDAC2 <= {1'b0,7'd21};
@@ -247,10 +265,10 @@ always @ (posedge Clock) begin
      ThrDACa <= {1'b0,7'd23};
      ThrDACb <= {1'b0,7'd22};
      PrtyDAC <= 12'b100100010111; 
-
+*/
      // Board H
-/*
-     Version <= 8'h48;
+
+     /*Version <= 8'h48;
      ThrDAC0 <= {1'b0,7'd23};                
      ThrDAC1 <= {1'b0,7'd23};
      ThrDAC2 <= {1'b0,7'd23};
@@ -299,10 +317,9 @@ always @ (posedge Clock) begin
 // Here is where individual channels can be masked out from trigger
 //On all boards we mask the first and last channel, since they tend to be noisy and are not important
 	 
-// Board C trigger mask	 
-// Chip 9, channel 17 is noisy
+     // Board C trigger mask. Chip 9, channel 17 is noisy
 /*
-	  TrigMSK0 <= 64'hfffffffffffffffe;   
+	 TrigMSK0 <= 64'hfffffffffffffffe;   
      TrigMSK1 <= 64'hffffffffffffffff;
      TrigMSK2 <= 64'hffffffffffffffff;
      TrigMSK3 <= 64'hffffffffffffffff;
@@ -363,7 +380,7 @@ always @ (posedge Clock) begin
      TrigMSKa <= 64'hffffffffffffffff;
      TrigMSKb <= 64'h7fffffffffffffff;
      PrtyMSKT <= 12'b100001000001;
- */ 
+*/  
      //Other boards, mask off only the first and last channels:
  
      TrigMSK0 <= 64'hfffffffffffffffe;   

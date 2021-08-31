@@ -267,43 +267,31 @@ IBUFDS Data9_BUFFER    (.I(Data9_P), .IB(Data9_N), .O(Data[9]));
 IBUFDS DataA_BUFFER    (.I(DataA_P), .IB(DataA_N), .O(Data[10]));
 IBUFDS DataB_BUFFER    (.I(DataB_P), .IB(DataB_N), .O(Data[11]));
 
-// Register the data from the ASICs after a delay (Note the inverted clock)
-assign DataDly[0] = Data[0];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data0_DELAY (.IDATAIN(Data[0]), .DATAOUT(DataDly[0]));
-IDDR2 Data0_Reg (.D(DataDly[0]), .Q0(DataReg[0]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[1] = Data[1];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data1_DELAY (.IDATAIN(Data[1]), .DATAOUT(DataDly[1]));
-IDDR2 Data1_Reg (.D(DataDly[1]), .Q0(DataReg[1]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[2] = Data[2];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data2_DELAY (.IDATAIN(Data[2]), .DATAOUT(DataDly[2]));
-IDDR2 Data2_Reg (.D(DataDly[2]), .Q0(DataReg[2]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[3] = Data[3];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data3_DELAY (.IDATAIN(Data[3]), .DATAOUT(DataDly[3]));
-IDDR2 Data3_Reg (.D(DataDly[3]), .Q0(DataReg[3]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[4] = Data[4];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data4_DELAY (.IDATAIN(Data[4]), .DATAOUT(DataDly[4]));
-IDDR2 Data4_Reg (.D(DataDly[4]), .Q0(DataReg[4]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[5] = Data[5];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data5_DELAY (.IDATAIN(Data[5]), .DATAOUT(DataDly[5]));
-IDDR2 Data5_Reg (.D(DataDly[5]), .Q0(DataReg[5]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[6] = Data[6];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data6_DELAY (.IDATAIN(Data[6]), .DATAOUT(DataDly[6]));
-IDDR2 Data6_Reg (.D(DataDly[6]), .Q0(DataReg[6]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[7] = Data[7];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data7_DELAY (.IDATAIN(Data[7]), .DATAOUT(DataDly[7]));
-IDDR2 Data7_Reg (.D(DataDly[7]), .Q0(DataReg[7]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[8] = Data[8];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(25), .DELAY_SRC("IDATAIN")) Data8_DELAY (.IDATAIN(Data[8]), .DATAOUT(DataDly[8]));
-IDDR2 Data8_Reg (.D(DataDly[8]), .Q0(DataReg[8]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[9] = Data[9];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data9_DELAY (.IDATAIN(Data[9]), .DATAOUT(DataDly[9]));
-IDDR2 Data9_Reg (.D(DataDly[9]), .Q0(DataReg[9]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[10] = Data[10];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data10_DELAY (.IDATAIN(Data[10]), .DATAOUT(DataDly[10]));
-IDDR2 DataA_Reg (.D(DataDly[10]), .Q0(DataReg[10]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
-assign DataDly[11] = Data[11];
-//IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data11_DELAY (.IDATAIN(Data[11]), .DATAOUT(DataDly[11]));
-IDDR2 DataB_Reg (.D(DataDly[11]), .Q0(DataReg[11]), .C0(~CLK_DLY), .C1(CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+// Register the data from the ASICs after a delay
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data0_DELAY (.IDATAIN(Data[0]), .DATAOUT(DataDly[0]));
+IDDR2 Data0_Reg (.D(DataDly[0]), .Q0(DataReg[0]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data1_DELAY (.IDATAIN(Data[1]), .DATAOUT(DataDly[1]));
+IDDR2 Data1_Reg (.D(DataDly[1]), .Q0(DataReg[1]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data2_DELAY (.IDATAIN(Data[2]), .DATAOUT(DataDly[2]));
+IDDR2 Data2_Reg (.D(DataDly[2]), .Q0(DataReg[2]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data3_DELAY (.IDATAIN(Data[3]), .DATAOUT(DataDly[3]));
+IDDR2 Data3_Reg (.D(DataDly[3]), .Q0(DataReg[3]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data4_DELAY (.IDATAIN(Data[4]), .DATAOUT(DataDly[4]));
+IDDR2 Data4_Reg (.D(DataDly[4]), .Q0(DataReg[4]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data5_DELAY (.IDATAIN(Data[5]), .DATAOUT(DataDly[5]));
+IDDR2 Data5_Reg (.D(DataDly[5]), .Q0(DataReg[5]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data6_DELAY (.IDATAIN(Data[6]), .DATAOUT(DataDly[6]));
+IDDR2 Data6_Reg (.D(DataDly[6]), .Q0(DataReg[6]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data7_DELAY (.IDATAIN(Data[7]), .DATAOUT(DataDly[7]));
+IDDR2 Data7_Reg (.D(DataDly[7]), .Q0(DataReg[7]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data8_DELAY (.IDATAIN(Data[8]), .DATAOUT(DataDly[8]));
+IDDR2 Data8_Reg (.D(DataDly[8]), .Q0(DataReg[8]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data9_DELAY (.IDATAIN(Data[9]), .DATAOUT(DataDly[9]));
+IDDR2 Data9_Reg (.D(DataDly[9]), .Q0(DataReg[9]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data10_DELAY (.IDATAIN(Data[10]), .DATAOUT(DataDly[10]));
+IDDR2 DataA_Reg (.D(DataDly[10]), .Q0(DataReg[10]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
+IODELAY2 #(.IDELAY_TYPE("FIXED"),.IDELAY_VALUE(delayVal), .DELAY_SRC("IDATAIN")) Data11_DELAY (.IDATAIN(Data[11]), .DATAOUT(DataDly[11]));
+IDDR2 DataB_Reg (.D(DataDly[11]), .Q0(DataReg[11]), .C0(CLK_DLY), .C1(~CLK_DLY), .CE(1'b1), .R(1'b0), .S(1'b0));
 
 //Main program for the Tracker FPGA
 
