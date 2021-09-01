@@ -9,6 +9,7 @@
 // V88 Initial implementation for 8 boards
 // V89 Fixed bug in the state machine that saves the two trigger bits!  3/18/21
 // V90 Fixed code to use all 4 lsb of NTkrLyr. The previous version was not working with 8 layers.
+// V91 Introduce timing calibration for the signals coming from the ASICs
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
