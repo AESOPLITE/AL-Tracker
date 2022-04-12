@@ -10,6 +10,8 @@
 // V89 Fixed bug in the state machine that saves the two trigger bits!  3/18/21
 // V90 Fixed code to use all 4 lsb of NTkrLyr. The previous version was not working with 8 layers.
 // V91 Introduce timing calibration for the signals coming from the ASICs
+// V92 Changed usage of ASIC mask to affect only the TReq.  Modified defaults for TKR setup.
+// V93 Prevent bits from going into the RAMbuffer during load register commands 
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
@@ -52,7 +54,7 @@ output CalEn;               // enable for CalInc
 output Debug1, Debug2, Debug3, Debug4;
 input  Debug5, Debug6;
 
-parameter [7:0] Version = 8'd91;  // !!!Check whether the ASIC initialization routine is engaged!!!!
+parameter [7:0] Version = 8'd93;  // !!!Check whether the ASIC initialization routine is engaged!!!!
 
 reg CalIO;
 reg CalRst;
@@ -483,13 +485,11 @@ reg [11:0] ASICmask;
 wire [15:0] ASICdataMSK, TReqMSK;
 reg [11:0] DataToMerge;
 reg SendEvt;
-assign ASICdataMSK[11:0] = ASICdata & ASICmask;
+assign ASICdataMSK[11:0] = ASICdata; // & ASICmask;   Mask only the TReq
 assign TReqMSK = TReq & ASICmask;
 assign DmpTheEvent = MstrDmpEv | LclDmpEvt;
 wire [3:0] ErrorCode1;
-TkrDataMerge TkrDataMerge_U(.ErrorOut(MergeError),.Nevent(NevtMerge),.MergeDataOut(MergedData),.BufClrAll(BufClr),.ErrBuf(MergeErrors),
-                            .Clock(SysCLK),.Reset(ResetLocal),.DataIn(DataToMerge),.Address(BrdAddress),.SendEvt(SendEvt),.DumpEvt(DmpTheEvent),.Mask(ASICmask),.DmpEvt(EvtDumped),.ErrCode(ErrorCode1[3:0]));            
-                            
+TkrDataMerge TkrDataMerge_U(.ErrorOut(MergeError),.Nevent(NevtMerge),.MergeDataOut(MergedData),.BufClrAll(BufClr),.ErrBuf(MergeErrors),.Clock(SysCLK),.Reset(ResetLocal),.DataIn(DataToMerge),.Address(BrdAddress),.SendEvt(SendEvt),.DumpEvt(DmpTheEvent),.Mask(12'hFFF),.DmpEvt(EvtDumped),.ErrCode(ErrorCode1[3:0]));                                        
 // Trigger logic for forming the output trigger primitive                            
 reg TrgLogic;          // 0 for AND logic, 1 for OR logic between this layer and the layers above
 reg TrgMask;           // 1 to include this layer in the trigger primitive
@@ -500,7 +500,7 @@ reg endStatus;         // 1 if this board starts the trigger logic chain, 0 othe
 assign TriggerOR = TReqMSK[0] | TReqMSK[1] | TReqMSK[2] | TReqMSK[3] | TReqMSK[4] | TReqMSK[5] | TReqMSK[6] | TReqMSK[7] | TReqMSK[8] | TReqMSK[9] | TReqMSK[10] | TReqMSK[11];    
 always @ (posedge TriggerOR) $display("%g\t AESOP_TKR %h: trigger-OR primitive, TReqMSK=%b",$time,BrdAddress,TReqMSK);
 
-// Stretch the trigger primitive in preparation for boolean logic, but do not delay it                      
+// Stretch the trigger primitive in preparation for boolean logic, but do not delay it   
 TrgStretch TrgStrchOR(.Clock(SysCLK),.Reset(ResetLocal),.TReqIn(TriggerOR),.TrgPls(TrgStrch),.TrgLen(TrgLen),.TrgDly(8'h00),.Address(BrdAddress));                            
 
 // Combine the trigger from the layer above with the trigger from this layer, and pass it to the layer below
@@ -1014,7 +1014,7 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                           if (ToTFPGA==BrdAddress[2:0]) DOutMux = TOTdata;   // Send calibration TOT (trigger) data only from the selected FPGA
                           else DOutMux = DataIn;
                       end else begin
-                          if (This && ASICaddress != 5'b11111) DOutMux = ASICdataMSK[ASICaddress[3:0]];
+                          if (Command > 8h1F && Command < 8h26 && This && ASICaddress != 5'b11111) DOutMux = ASICdataMSK[ASICaddress[3:0]];
                           else DOutMux = DataIn;
                       end
                       DataOut = 1'b0;
@@ -1025,7 +1025,7 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                           if (ToTFPGA==BrdAddress[2:0]) DataOut = TOTdata;
                           else DataOut = DataIn;
                       end else begin
-                          if (This && ASICaddress != 5'b11111) DataOut = ASICdataMSK[ASICaddress[3:0]];
+                          if (Command > 8h1F && Command < 8h26 && This && ASICaddress != 5'b11111) DataOut = ASICdataMSK[ASICaddress[3:0]];
                           else DataOut = DataIn;
                       end
                       DOutMux = 1'b0;
@@ -1152,7 +1152,7 @@ always @ (posedge SysCLK) begin
         nEvSent <= 0;
         CmdCount <= 0;
         ConfigReset <= 1'b0;
-        TrigDly <= 8'd10;   // Global trigger delay, in clock cycles
+        TrigDly <= 8'd1;   // Global trigger delay, in clock cycles
         TrigLen <= 8'd1;   // Global trigger stretch, must always be set to 1!!!
         TrigSrc <= 8'd0;   // Default trigger is external
         dualTrig <= 1'b0;  // Master will not receive both triggers (they go to PSOC)  
@@ -1166,12 +1166,12 @@ always @ (posedge SysCLK) begin
         TrgLen <= 8'h7;      // Length of the output trigger primitive, in clock cycles
         TrgDly <= 8'h1;      // Delay of the internal trigger
         trgCntrChoice <= 1'b0;    
-        if (BrdAddress != 4'h6 && BrdAddress != 4'h1) TrgMask <= 1'b1;  //Boards 1 and 6 on the bending side are not included in the trigger coincidence
+        if (BrdAddress != 4'h6 && BrdAddress != 4'h4) TrgMask <= 1'b1;  //Boards 4 and 6 on the bending side are not included in the trigger coincidence
         else TrgMask <= 1'b0;
         TrgLogic <= 1'b0;    // Default to AND logic for the output trigger primitive
         trgEnable <= 1'b0;   // The trigger is disabled at startup
-        if (BrdAddress == 4'h6 || BrdAddress == 4'h7) endStatus <= 1'b1; //**** need to fix for new trigger scheme!!
-        else endStatus <= 1'b0;
+        if (BrdAddress == 4'h3 || BrdAddress == 4'h7) endStatus <= 1'b1; 
+        else endStatus <= 1'b0;   // Boards 3 & 7 are at the ends of the trigger coincidences
         cntError1 <= 0;
         cntError2 <= 0;
         cntError3 <= 0;
