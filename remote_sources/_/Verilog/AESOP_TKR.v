@@ -577,7 +577,7 @@ parameter [30:0] CmdR = 31'b0000000000000000010000000000000;        // Shift in 
 parameter [30:0] NbyT = 31'b0000000000000000100000000000000;        // Read in the number of bytes
 parameter [30:0] DatI = 31'b0000000000000001000000000000000;        // Read in the data bytes
 parameter [30:0] LstD = 31'b0000000000000010000000000000000;        // Store the last data byte
-parameter [30:0] CmdO = 31'b0000000000000100000000000000000;        // Start outputing a serial command stream from the master
+parameter [30:0] CmdO = 31'b0000000000000100000000000000000;        // Start outputting a serial command stream from the master
 parameter [30:0] Shft = 31'b0000000000001000000000000000000;        // Shift out the address, command, and number of data bytes
 parameter [30:0] DatO = 31'b0000000000010000000000000000000;        // Shift out the data bytes
 parameter [30:0] DUMP = 31'b0000000000100000000000000000000;        // Master dump data to the UART
@@ -978,19 +978,19 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                           if (ToTFPGA==BrdAddress[2:0]) DOutMux = TOTdata;
                           else DOutMux = DataIn;
                       end else begin
-                          if (This && (ASICaddress != 5'b11111)) DOutMux = ASICdataMSK[ASICaddress[3:0]];
+                          if (Command > 8'h1F && Command < 8'h26 && This && (ASICaddress != 5'b11111)) DOutMux = ASICdataMSK[ASICaddress[3:0]];
                           else DOutMux = DataIn;
                       end
                       DataOut = 1'b0;
                   end else begin 
-                     if (Command == 8'h02) begin
-                         if (ToTFPGA==BrdAddress[2:0]) DataOut = TOTdata;
-                         else DataOut = DataIn;
-                     end else begin
-                         if (This && (ASICaddress != 5'b11111)) DataOut = ASICdataMSK[ASICaddress[3:0]];
-                         else DataOut = DataIn;
-                     end
-                  DOutMux = 1'b0;
+                      if (Command == 8'h02) begin
+                          if (ToTFPGA==BrdAddress[2:0]) DataOut = TOTdata;
+                          else DataOut = DataIn;
+                      end else begin
+                          if (Command > 8'h1F && Command < 8'h26 && This && (ASICaddress != 5'b11111)) DataOut = ASICdataMSK[ASICaddress[3:0]];
+                          else DataOut = DataIn;
+                      end
+                      DOutMux = 1'b0;
                   end
               end
         RdEv: begin
@@ -1014,7 +1014,7 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                           if (ToTFPGA==BrdAddress[2:0]) DOutMux = TOTdata;   // Send calibration TOT (trigger) data only from the selected FPGA
                           else DOutMux = DataIn;
                       end else begin
-                          if (Command > 8h1F && Command < 8h26 && This && ASICaddress != 5'b11111) DOutMux = ASICdataMSK[ASICaddress[3:0]];
+                          if (Command > 8'h1F && Command < 8'h26 && This && ASICaddress != 5'b11111) DOutMux = ASICdataMSK[ASICaddress[3:0]];
                           else DOutMux = DataIn;
                       end
                       DataOut = 1'b0;
@@ -1025,7 +1025,7 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                           if (ToTFPGA==BrdAddress[2:0]) DataOut = TOTdata;
                           else DataOut = DataIn;
                       end else begin
-                          if (Command > 8h1F && Command < 8h26 && This && ASICaddress != 5'b11111) DataOut = ASICdataMSK[ASICaddress[3:0]];
+                          if (Command > 8'h1F && Command < 8'h26 && This && ASICaddress != 5'b11111) DataOut = ASICdataMSK[ASICaddress[3:0]];
                           else DataOut = DataIn;
                       end
                       DOutMux = 1'b0;
