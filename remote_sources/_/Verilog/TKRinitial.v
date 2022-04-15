@@ -234,6 +234,7 @@ always @ (posedge Clock) begin
      ThrDACb <= {1'b0,7'd25};
      PrtyDAC <= 12'b101111111010; 
 */  
+/*
      // Board F, from scan Feb_3_2020
      Version <= 8'h46;
      ThrDAC0 <= {1'b0,7'd24};                
@@ -248,10 +249,10 @@ always @ (posedge Clock) begin
      ThrDAC9 <= {1'b0,7'd23};
      ThrDACa <= {1'b0,7'd23};
      ThrDACb <= {1'b0,7'd26};
-     PrtyDAC <= 12'b100100010111; 
-  
+     PrtyDAC <= 12'b100110001110; 
+*/  
      // Board G
-/*     Version <= 8'h47;
+     Version <= 8'h47;
      ThrDAC0 <= {1'b0,7'd22};                
      ThrDAC1 <= {1'b0,7'd22};
      ThrDAC2 <= {1'b0,7'd21};
@@ -265,7 +266,7 @@ always @ (posedge Clock) begin
      ThrDACa <= {1'b0,7'd23};
      ThrDACb <= {1'b0,7'd22};
      PrtyDAC <= 12'b100100010111; 
-*/
+
      // Board H
 
      /*Version <= 8'h48;
