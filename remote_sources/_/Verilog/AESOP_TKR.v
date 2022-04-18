@@ -11,7 +11,7 @@
 // V90 Fixed code to use all 4 lsb of NTkrLyr. The previous version was not working with 8 layers.
 // V91 Introduce timing calibration for the signals coming from the ASICs
 // V92 Changed usage of ASIC mask to affect only the TReq.  Modified defaults for TKR setup.
-// V93 Fix parity error in config reg load 
+// V94 Prevent bits from going into the RAMbuffer during load register commands; fix parity errors in default register settings
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
@@ -54,7 +54,7 @@ output CalEn;               // enable for CalInc
 output Debug1, Debug2, Debug3, Debug4;
 input  Debug5, Debug6;
 
-parameter [7:0] Version = 8'd93;  // !!!Check whether the ASIC initialization routine is engaged!!!!
+parameter [7:0] Version = 8'd94;  // !!!Check whether the ASIC initialization routine is engaged!!!!
 
 reg CalIO;
 reg CalRst;
@@ -1014,8 +1014,13 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                           if (ToTFPGA==BrdAddress[2:0]) DOutMux = TOTdata;   // Send calibration TOT (trigger) data only from the selected FPGA
                           else DOutMux = DataIn;
                       end else begin
-                          if (This && ASICaddress != 5'b11111) DOutMux = ASICdataMSK[ASICaddress[3:0]];
-                          else DOutMux = DataIn;
+                          if (ASICaddress == 5'b11111) begin
+                              DOutMux = 1'b0;
+                          end else if (This) begin
+                              DOutMux = ASICdataMSK[ASICaddress[3:0]];
+                          end else begin
+                              DOutMux = DataIn;
+                          end
                       end
                       DataOut = 1'b0;
                   end else begin
@@ -1025,8 +1030,13 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                           if (ToTFPGA==BrdAddress[2:0]) DataOut = TOTdata;
                           else DataOut = DataIn;
                       end else begin
-                          if (This && ASICaddress != 5'b11111) DataOut = ASICdataMSK[ASICaddress[3:0]];
-                          else DataOut = DataIn;
+                          if (ASICaddress == 5'b11111) begin
+                              DOutMux = 1'b0;
+                          end else if (This) begin
+                              DOutMux = ASICdataMSK[ASICaddress[3:0]];
+                          end else begin
+                              DataOut = DataIn;
+                          end
                       end
                       DOutMux = 1'b0;
                   end
