@@ -12,6 +12,7 @@
 // V91 Introduce timing calibration for the signals coming from the ASICs
 // V92 Changed usage of ASIC mask to affect only the TReq.  Modified defaults for TKR setup.
 // V94 Prevent bits from going into the RAMbuffer during load register commands; fix parity errors in default register settings
+// V95 Remove the ASIC initialization code, as it is going to be done instead by the PSOC
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
@@ -54,7 +55,7 @@ output CalEn;               // enable for CalInc
 output Debug1, Debug2, Debug3, Debug4;
 input  Debug5, Debug6;
 
-parameter [7:0] Version = 8'd94;  // !!!Check whether the ASIC initialization routine is engaged!!!!
+parameter [7:0] Version = 8'd95;  
 
 reg CalIO;
 reg CalRst;
@@ -551,48 +552,40 @@ always @ (TxD_startEv or TxD_dataEv or TxD_startEcho or TxD_dataEcho or StateEv 
     end
 end
 
-// This routine will send a sequence of commands to the ASICs to set their default register values following a reset
-reg GoInitialize;
-wire [7:0] BoardID;
-//assign DoneInit = 1'b1;   // TEMPORARY FOR DEBUGGING!!!!!!!!!!!!!!!! So simulations don't take forever. Use this line and the next for simulation.
-//TKRinitial InitializeASICS(.Clock(SysCLK), .Reset(ResetLocal), .Go(1'b0), .CMD(CMDinit), .Done(DoneDummy), .Version(BoardID));
-TKRinitial InitializeASICS(.Clock(SysCLK), .Reset(ResetLocal), .Go(GoInitialize), .CMD(CMDinit), .Done(DoneInit), .Version(BoardID));
-
 // State machine to receive the command stream and decode the commands sent to the Master board by the UART interface
 
-parameter [30:0] Wait = 31'b0000000000000000000000000000001;        // Wait for the first Byte of command data (address)
-parameter [30:0] GtB2 = 31'b0000000000000000000000000000010;        // Get the second Byte of command data (command code)
-parameter [30:0] GtB3 = 31'b0000000000000000000000000000100;        // Get the third Byte of command data (number of data Bytes)
-parameter [30:0] GtDB = 31'b0000000000000000000000000001000;        // Get the N data Bytes from the command stream
-parameter [30:0] Deco = 31'b0000000000000000000000000010000;        // Decode the command and execute the requested action
-parameter [30:0] ACmd = 31'b0000000000000000000000000100000;        // Shift a command out to the ASICs
-parameter [30:0] RegO = 31'b0000000000000000000000001000000;        // Output register information
-parameter [30:0] RegT = 31'b0000000000000000000000010000000;        // Fill in type of register output
-parameter [30:0] RegD = 31'b0000000000000000000000100000000;        // Fill in the register output data
-parameter [30:0] Cnfg = 31'b0000000000000000000001000000000;        // Fill data into the ASIC configuration register
-parameter [30:0] RdEv = 31'b0000000000000000000010000000000;        // Send out an event upon read command
-parameter [30:0] Mask = 31'b0000000000000000000100000000000;        // Load ASIC mask registers
-parameter [30:0] AddR = 31'b0000000000000000001000000000000;        // Shift in the command address from serial stream
-parameter [30:0] CmdR = 31'b0000000000000000010000000000000;        // Shift in the command bits
-parameter [30:0] NbyT = 31'b0000000000000000100000000000000;        // Read in the number of bytes
-parameter [30:0] DatI = 31'b0000000000000001000000000000000;        // Read in the data bytes
-parameter [30:0] LstD = 31'b0000000000000010000000000000000;        // Store the last data byte
-parameter [30:0] CmdO = 31'b0000000000000100000000000000000;        // Start outputting a serial command stream from the master
-parameter [30:0] Shft = 31'b0000000000001000000000000000000;        // Shift out the address, command, and number of data bytes
-parameter [30:0] DatO = 31'b0000000000010000000000000000000;        // Shift out the data bytes
-parameter [30:0] DUMP = 31'b0000000000100000000000000000000;        // Master dump data to the UART
-parameter [30:0] AsRg = 31'b0000000001000000000000000000000;        // Receive register data from an ASIC
-parameter [30:0] Buss = 31'b0000000010000000000000000000000;        // Hold the data output active while data are reading out
-parameter [30:0] Echo = 31'b0000000100000000000000000000000;        // Echo the command
-parameter [30:0] Ech1 = 31'b0000001000000000000000000000000;        // Echo the command
-parameter [30:0] Scnd = 31'b0000010000000000000000000000000;        // Get the second command data byte
-parameter [30:0] InaS = 31'b0000100000000000000000000000000;        // Send a command to an ina226 monitoring chip
-parameter [30:0] InaR = 31'b0001000000000000000000000000000;        // Send a command to read an ina226 register
-parameter [30:0] InSh = 31'b0010000000000000000000000000000;        // Shift out the i2c data
-parameter [30:0] ACfg = 31'b0100000000000000000000000000000;        // Default initialization of ASICs
-parameter [30:0] Evcl = 31'b1000000000000000000000000000000;        // Wait for ASIC buffers to be cleared when dumping an event
+parameter [29:0] Wait = 30'b000000000000000000000000000001;        // Wait for the first Byte of command data (address)
+parameter [29:0] GtB2 = 30'b000000000000000000000000000010;        // Get the second Byte of command data (command code)
+parameter [29:0] GtB3 = 30'b000000000000000000000000000100;        // Get the third Byte of command data (number of data Bytes)
+parameter [29:0] GtDB = 30'b000000000000000000000000001000;        // Get the N data Bytes from the command stream
+parameter [29:0] Deco = 30'b000000000000000000000000010000;        // Decode the command and execute the requested action
+parameter [29:0] ACmd = 30'b000000000000000000000000100000;        // Shift a command out to the ASICs
+parameter [29:0] RegO = 30'b000000000000000000000001000000;        // Output register information
+parameter [29:0] RegT = 30'b000000000000000000000010000000;        // Fill in type of register output
+parameter [29:0] RegD = 30'b000000000000000000000100000000;        // Fill in the register output data
+parameter [29:0] Cnfg = 30'b000000000000000000001000000000;        // Fill data into the ASIC configuration register
+parameter [29:0] RdEv = 30'b000000000000000000010000000000;        // Send out an event upon read command
+parameter [29:0] Mask = 30'b000000000000000000100000000000;        // Load ASIC mask registers
+parameter [29:0] AddR = 30'b000000000000000001000000000000;        // Shift in the command address from serial stream
+parameter [29:0] CmdR = 30'b000000000000000010000000000000;        // Shift in the command bits
+parameter [29:0] NbyT = 30'b000000000000000100000000000000;        // Read in the number of bytes
+parameter [29:0] DatI = 30'b000000000000001000000000000000;        // Read in the data bytes
+parameter [29:0] LstD = 30'b000000000000010000000000000000;        // Store the last data byte
+parameter [29:0] CmdO = 30'b000000000000100000000000000000;        // Start outputting a serial command stream from the master
+parameter [29:0] Shft = 30'b000000000001000000000000000000;        // Shift out the address, command, and number of data bytes
+parameter [29:0] DatO = 30'b000000000010000000000000000000;        // Shift out the data bytes
+parameter [29:0] DUMP = 30'b000000000100000000000000000000;        // Master dump data to the UART
+parameter [29:0] AsRg = 30'b000000001000000000000000000000;        // Receive register data from an ASIC
+parameter [29:0] Buss = 30'b000000010000000000000000000000;        // Hold the data output active while data are reading out
+parameter [29:0] Echo = 30'b000000100000000000000000000000;        // Echo the command
+parameter [29:0] Ech1 = 30'b000001000000000000000000000000;        // Echo the command
+parameter [29:0] Scnd = 30'b000010000000000000000000000000;        // Get the second command data byte
+parameter [29:0] InaS = 30'b000100000000000000000000000000;        // Send a command to an ina226 monitoring chip
+parameter [29:0] InaR = 30'b001000000000000000000000000000;        // Send a command to read an ina226 register
+parameter [29:0] InSh = 30'b010000000000000000000000000000;        // Shift out the i2c data
+parameter [29:0] Evcl = 30'b100000000000000000000000000000;        // Wait for ASIC buffers to be cleared when dumping an event
 
-reg [30:0] State, NextState;
+reg [29:0] State, NextState;
 reg [23:0] CntTime;
 reg [3:0] Address;
 reg [7:0] Command;
@@ -633,11 +626,10 @@ assign doneRdReg = (StateRg == WtDnRg && NextStateRg == WaitRg);
 
 always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt or DMPDone or TOTdata or DataDone or ASICaddress or StrobeOutIna or i2cResults or CntEcho or TxD_busy or DatByte or DataFlg or CmdData[2]
                 or BrdAddress or Address or CmdCount or CmdEv or MstrDataEv or RxD_data_ready or CntTime or Command or doneRdEvt or Cnt or This or lenData or RxD_data 
-                or DoneInit or Ndata or doneRdReg or CmdIn or Master or CmdStrng or RegOutPut or DataIn or CntZ or ASICdataMSK or MergedData or CMDinit or All) begin
+                or Ndata or doneRdReg or CmdIn or Master or CmdStrng or RegOutPut or DataIn or CntZ or ASICdataMSK or MergedData or All) begin
     if (State == ACmd && (This | All)) CmdASIC = CmdStrng[74];
     else begin
-        if (State == ACfg) CmdASIC = CMDinit;  // Multiplex the command stream to the ASICs
-        else if (StateTg == SnRdTg) CmdASIC = CmdRd[12];
+        if (StateTg == SnRdTg) CmdASIC = CmdRd[12];
         else CmdASIC = 1'b0;
     end
     case (State)
@@ -779,7 +771,6 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                   else begin                      
                       if (CntEcho == 5) begin
                           case (Command)
-                              8'h05:  NextState = ACfg;
                               8'h0c:  NextState = ACmd;
                               8'h45:  NextState = InaS;
                               8'h10:  NextState = ACmd;
@@ -788,7 +779,6 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                               8'h13:  NextState = Mask;
                               8'h14:  NextState = Mask;
                               8'h15:  NextState = Mask;
-                              8'h26:  NextState = ACfg;
                               default: NextState = Wait;                                     
                           endcase
                       end else begin
@@ -897,15 +887,6 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                   DOutMux = 1'b0;
                   DataOut = SgnlDmp;
                   DataToMerge = ASICdataMSK[11:0];
-                  TxD_dataEcho = 8'h3;
-              end
-        ACfg: begin
-                  if (DoneInit || CntTime == 24'hffffff) NextState = Wait;
-                  else NextState = ACfg;
-                  CmdRepeat = 1'b0;     // Serial command going to the next layer up, for master only (other layers just pass command in to command out)
-                  DOutMux = 1'b0;       // Data streaming into the RAM buffer (master only)
-                  DataOut = DataIn;     // Serial data going to the next layer down
-                  DataToMerge = ASICdataMSK[11:0];      // 12 serial data streams going from ASICs to the merging program
                   TxD_dataEcho = 8'h3;
               end
         InaR: begin
@@ -1044,7 +1025,6 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                       case (Command)
                           8'h01: if (Master) NextState = RdEv; else NextState = Wait;
                           8'h02: NextState = AsRg;
-                          8'h0C: if (ASICaddress==5'b11111) NextState = ACfg; else NextState = Wait; // For the ASIC soft reset, go on here to reload the registers with the defaults
                           8'h20: NextState = AsRg;
                           8'h21: NextState = AsRg;
                           8'h22: NextState = AsRg;
@@ -1188,7 +1168,6 @@ always @ (posedge SysCLK) begin
         cntError8 <= 0;
         cntError9 <= 0;
         cntErrorA <= 0;
-        GoInitialize <= 1'b0;
         ToTFPGA <= 3'b000;
         LclDmpEvt <= 1'b0;
         MxWaitGO <= 45;
@@ -1352,13 +1331,6 @@ always @ (posedge SysCLK) begin
                                                   $display("%g\t AESOP_TKR %d:  FPGA logic reset",$time,BrdAddress);
                                               end
                                           end
-                                  8'h05:  begin
-                                              GoInitialize <= 1'b1;
-                                          end
-                                  8'h26:  begin
-                                              GoInitialize <= 1'b1;
-                                              //if (This) $display("%g\t AESOP_TKR: CmdASIC=%b State=%b GoInitialize=%b",$time,CmdASIC,State,GoInitialize);
-                                          end
                               endcase
                           end
                       end
@@ -1493,8 +1465,6 @@ always @ (posedge SysCLK) begin
                                   end        
                           8'h25:  begin
                                       if (This) CmdStrng <= {1'b1,ASICaddress,4'b1000,Prty,64'd0};
-                                  end
-                          8'h26:  begin
                                   end
                           8'h45:  begin          // Load an i2c register
                                       i2cAddr <= CmdData[0];
@@ -1692,12 +1662,6 @@ always @ (posedge SysCLK) begin
                       CntTime <= CntTime + 1;
                       if (CntTime == 24'h00ffff) cntError8 <= cntError8 + 1;
                   end
-            ACfg: begin
-                      CntTime <= CntTime + 1;
-                      GoInitialize <= 1'b0;
-                      if (CntTime == 24'hffffff) cntError2 <= cntError2 + 1;
-                      //if (This) $display("%g\t AESOP_TKR: CmdASIC=%b State=%b GoInitialize=%b",$time,CmdASIC,State,GoInitialize);
-                  end
             InaR: begin
                       if (StrobeOutIna) begin
                           i2cResults <= {1'b1,i2cRegOut,1'b1};
@@ -1783,8 +1747,7 @@ always @ (posedge SysCLK) begin
                           StartRead <= 1'b1;
                       end else begin
                           FrstBt <= 1'b0;                          
-                      end           
-                      if (NextState == ACfg && (ASICaddress==5'b11111)) GoInitialize <= 1'b1;                      
+                      end                          
                   end
             RegT: begin
                       case (Cnt) 
@@ -1834,7 +1797,7 @@ always @ (posedge SysCLK) begin
                               8'h6B: RegData[6] <= nEvent[15:8];
                               8'h6D: RegData[6] <= trgCntr[15:8];
                               8'h71: RegData[6] <= TrgLen;
-                              8'h73: RegData[6] <= BoardID;
+                              8'h73: RegData[6] <= 8'h4A;   // Generic board ID, now that all boards get programmed the same
                               8'h74: RegData[6] <= TrigSrc;
                               8'h75: RegData[6] <= NMissedTg;
                               8'h76: RegData[6] <= EncStates1;      //First Byte of state machine status
@@ -2537,8 +2500,8 @@ end
 
 // Keep these Debug outputs quiet when not needed, as they put CMOS signals out onto the PCB!  
 // Note that none of these is currently connected to an output pin.                             
-assign Debug1 = 1'b0; //GoInitialize;
-assign Debug2 = 1'b0; //CMDinit;
+assign Debug1 = 1'b0; 
+assign Debug2 = 1'b0; 
 assign Debug3 = 1'b0;
 assign Debug4 = 1'b0;
 
