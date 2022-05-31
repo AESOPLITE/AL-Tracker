@@ -13,6 +13,7 @@
 // V92 Changed usage of ASIC mask to affect only the TReq.  Modified defaults for TKR setup.
 // V94 Prevent bits from going into the RAMbuffer during load register commands; fix parity errors in default register settings
 // V95 Remove the ASIC initialization code, as it is going to be done instead by the PSOC
+// V96 Back out the V94 load-register changes, as they were messing up register reads from non-master boards
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
@@ -55,7 +56,7 @@ output CalEn;               // enable for CalInc
 output Debug1, Debug2, Debug3, Debug4;
 input  Debug5, Debug6;
 
-parameter [7:0] Version = 8'd95;  
+parameter [7:0] Version = 8'd96;  
 
 reg CalIO;
 reg CalRst;
@@ -995,13 +996,8 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                           if (ToTFPGA==BrdAddress[2:0]) DOutMux = TOTdata;   // Send calibration TOT (trigger) data only from the selected FPGA
                           else DOutMux = DataIn;
                       end else begin
-                          if (ASICaddress == 5'b11111) begin
-                              DOutMux = 1'b0;
-                          end else if (This) begin
-                              DOutMux = ASICdataMSK[ASICaddress[3:0]];
-                          end else begin
-                              DOutMux = DataIn;
-                          end
+                          if (This && ASICaddress != 5'b11111) DOutMux = ASICdataMSK[ASICaddress[3:0]];
+                          else DOutMux = DataIn;
                       end
                       DataOut = 1'b0;
                   end else begin
@@ -1011,13 +1007,8 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                           if (ToTFPGA==BrdAddress[2:0]) DataOut = TOTdata;
                           else DataOut = DataIn;
                       end else begin
-                          if (ASICaddress == 5'b11111) begin
-                              DOutMux = 1'b0;
-                          end else if (This) begin
-                              DOutMux = ASICdataMSK[ASICaddress[3:0]];
-                          end else begin
-                              DataOut = DataIn;
-                          end
+                          if (This && ASICaddress != 5'b11111) DataOut = ASICdataMSK[ASICaddress[3:0]];
+                          else DataOut = DataIn;
                       end
                       DOutMux = 1'b0;
                   end
