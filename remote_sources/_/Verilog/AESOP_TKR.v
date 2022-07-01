@@ -16,6 +16,7 @@
 // V96 Back out the V94 load-register changes, as they were messing up register reads from non-master boards
 // V97 Zero CntTime in states RegD, InSh, Ech1, and ACmd, and added a timeout to the Echo state.
 // V98 Fixed bug in setting MxLyr; it was only getting set if configuration was set twice.
+// V99 Reset nEvent for 0x04 command
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
@@ -58,7 +59,7 @@ output CalEn;               // enable for CalInc
 output Debug1, Debug2, Debug3, Debug4;
 input  Debug5, Debug6;
 
-parameter [7:0] Version = 8'd98;  
+parameter [7:0] Version = 8'd99;  
 
 reg CalIO;
 reg CalRst;
@@ -1135,6 +1136,7 @@ always @ (posedge SysCLK) begin
     if (ResetExt) begin
         State <= Wait;
         ConfigReset <= 1'b1;
+		nEvent <= 0;
     end else if (ConfigReset) begin
         nEvSent <= 0;
         CmdCount <= 0;
@@ -1169,7 +1171,6 @@ always @ (posedge SysCLK) begin
         LclDmpEvt <= 1'b0;
         MxWaitGO <= 45;
         CntDump2 <= 0;
-        nEvent <= 0;
         ErrorCode2[3:0] <= 0;
         SaveCmd <= 0;
         enableTrgCnt <= 1'b0;
