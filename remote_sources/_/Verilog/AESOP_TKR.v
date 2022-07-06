@@ -17,6 +17,7 @@
 // V97 Zero CntTime in states RegD, InSh, Ech1, and ACmd, and added a timeout to the Echo state.
 // V98 Fixed bug in setting MxLyr; it was only getting set if configuration was set twice.
 // V99 Reset nEvent for 0x04 command
+// V100 Set the ASIC data delays to fixed, and set all delays to the max of 255
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
@@ -59,7 +60,7 @@ output CalEn;               // enable for CalInc
 output Debug1, Debug2, Debug3, Debug4;
 input  Debug5, Debug6;
 
-parameter [7:0] Version = 8'd99;  
+parameter [7:0] Version = 8'd100;  
 
 reg CalIO;
 reg CalRst;
@@ -771,27 +772,27 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                       4'h5: TxD_dataEcho = Command;                      
                       default: TxD_dataEcho = 8'h3;
                   endcase
-				  if (CntTime == 24'hffffff) begin
-				      NextState = Wait;
+                  if (CntTime == 24'hffffff) begin
+                      NextState = Wait;
                   end else begin
-					  if (TxD_busy) NextState = Echo;        
-					  else begin                      
-						  if (CntEcho == 5) begin
-							  case (Command)
-								  8'h0c:  NextState = ACmd;
-								  8'h45:  NextState = InaS;
-								  8'h10:  NextState = ACmd;
-								  8'h11:  NextState = ACmd;
-								  8'h12:  NextState = Cnfg;
-								  8'h13:  NextState = Mask;
-								  8'h14:  NextState = Mask;
-								  8'h15:  NextState = Mask;
-								  default: NextState = Wait;                                     
-							  endcase
-						  end else begin
-							  NextState = Ech1;
-						  end
-			          end
+                      if (TxD_busy) NextState = Echo;        
+                      else begin                      
+                          if (CntEcho == 5) begin
+                              case (Command)
+                                  8'h0c:  NextState = ACmd;
+                                  8'h45:  NextState = InaS;
+                                  8'h10:  NextState = ACmd;
+                                  8'h11:  NextState = ACmd;
+                                  8'h12:  NextState = Cnfg;
+                                  8'h13:  NextState = Mask;
+                                  8'h14:  NextState = Mask;
+                                  8'h15:  NextState = Mask;
+                                  default: NextState = Wait;                                     
+                              endcase
+                          end else begin
+                              NextState = Ech1;
+                          end
+                      end
                   end
                   DOutMux = 1'b0;
                   CmdRepeat = 1'b0;
@@ -1136,8 +1137,8 @@ always @ (posedge SysCLK) begin
     if (ResetExt) begin
         State <= Wait;
         ConfigReset <= 1'b1;
-		nEvent <= 0;
     end else if (ConfigReset) begin
+        nEvent <= 0;
         nEvSent <= 0;
         CmdCount <= 0;
         ConfigReset <= 1'b0;
@@ -1174,9 +1175,9 @@ always @ (posedge SysCLK) begin
         ErrorCode2[3:0] <= 0;
         SaveCmd <= 0;
         enableTrgCnt <= 1'b0;
-		CalEn <= 1'b0;
-		CalIO <= 1'b0;
-		CalRst <= 1'b0;
+        CalEn <= 1'b0;
+        CalIO <= 1'b0;
+        CalRst <= 1'b0;
     end else begin
         if (State != Wait && NextState == Wait) $display("%g\t AESOP_TKR %h: command decoder returning to the Wait state.",$time,BrdAddress);
         State <= NextState;
@@ -1307,13 +1308,13 @@ always @ (posedge SysCLK) begin
                   end
             Echo: begin
                       Cnt <= 0;
-					  CntTime <= CntTime + 1;
+                      CntTime <= CntTime + 1;
                       TxD_startEcho <= 1'b0;
                       ResetI2c <= 1'b0;
                       HardReset <= 1'b0;
-					  CalEn <= 1'b0;
-					  CalIO <= 1'b0;
-					  CalRst <= 1'b0;
+                      CalEn <= 1'b0;
+                      CalIO <= 1'b0;
+                      CalRst <= 1'b0;
                       if (!TxD_busy) begin
                           CntEcho <= CntEcho + 1;
                           if (CntEcho == 5) begin
@@ -1327,6 +1328,7 @@ always @ (posedge SysCLK) begin
                                   8'h04:  begin
                                               if (This) begin
                                                   ResetLocal <= 1'b1;
+                                                  nEvent <= 0;
                                                   $display("%g\t AESOP_TKR %d:  FPGA logic reset",$time,BrdAddress);
                                               end
                                           end
@@ -1336,7 +1338,7 @@ always @ (posedge SysCLK) begin
                   end
             Ech1: begin
                       Cnt <= Cnt + 1;
-					  CntTime <= 0;
+                      CntTime <= 0;
                       if (Master) begin
                           TxD_startEcho <= 1'b1;        
                           if (Cnt == 0) $display("%g\t AESOP_TKR state Ech1: sending TxD_start signal, CntEcho=%h, TxD_dataEcho=%b",$time,CntEcho,TxD_dataEcho);
@@ -1672,7 +1674,7 @@ always @ (posedge SysCLK) begin
                   end
             InSh: begin
                       Cnt <= Cnt + 1;
-					  CntTime <= 0;
+                      CntTime <= 0;
                       if (NextState == DUMP) DMPStart <= 1'b1;
                       i2cResults <= {i2cResults[16:0],1'b0};
                   end
@@ -1741,7 +1743,7 @@ always @ (posedge SysCLK) begin
             ACmd: begin
                       readCMDseen <= 1'b0;
                       CalStrobe <= 1'b0;
-					  CntTime <= 0;
+                      CntTime <= 0;
                       if (Cnt == 0) $display("%g\t AESOP_TKR %h: Sending command to ASICs: %b",$time,BrdAddress,CmdStrng);
                       Cnt <= Cnt + 1;
                       CmdStrng <= {CmdStrng[73:0],1'b0};  // Shift out the command to the ASICs
@@ -1773,7 +1775,7 @@ always @ (posedge SysCLK) begin
                   end
             RegD: begin
                       Cnt <= Cnt + 1;
-					  CntTime <= 0;
+                      CntTime <= 0;
                       if (Cnt == 0) begin
                           case (Command)
                               8'h07: RegData[6] <= TrigDly;
