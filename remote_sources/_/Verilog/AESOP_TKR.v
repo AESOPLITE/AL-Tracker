@@ -1743,7 +1743,7 @@ always @ (posedge SysCLK) begin
                       end
                       if (NextState == DUMP) DMPStart <= 1'b1;
                       if (CntTime > 511) begin
-                          ErrorCode2[3] = 1'b1;
+                          ErrorCode2[3] <= 1'b1;
                       end
                       CntTime <= CntTime + 1;
                   end
