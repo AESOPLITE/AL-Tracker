@@ -18,6 +18,7 @@
 // V98 Fixed bug in setting MxLyr; it was only getting set if configuration was set twice.
 // V99 Reset nEvent for 0x04 command
 // V100 Set the ASIC data delays to fixed, and set all delays to the max of 255
+// V101 Add command 0x84 for debugging purposes
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
@@ -60,7 +61,7 @@ output CalEn;               // enable for CalInc
 output Debug1, Debug2, Debug3, Debug4;
 input  Debug5, Debug6;
 
-parameter [7:0] Version = 8'd100;  
+parameter [7:0] Version = 8'd101;  
 
 reg CalIO;
 reg CalRst;
@@ -884,6 +885,7 @@ always @ (State or SgnlDmp or StateTg or CmdRd or StateTOT or ToTFPGA or ByteCnt
                       8'h76:  NextState = RegT;
                       8'h77:  NextState = RegT;
                       8'h78:  NextState = RegT;
+                      8'h84:  NextState = RegT;
                       default: begin
                                    NextState = Echo;
                                end
@@ -1133,6 +1135,8 @@ reg [23:0] trgCntrTime;  // Clock counter for measuring the trigger OR rate
 reg [15:0] trgCntr;      // Trigger rate counter
 reg enableTrgCnt;        // Set to start counting internal trigger ORs
 reg trgOrPrev;           // Internal trigger OR at the previous clock cycle
+reg [7:0] prevCmd;       // Save the previous command for debugging
+reg [7:0] prevDat;       // Save the previous command's first data byte, for debugging
 always @ (posedge SysCLK) begin
     if (ResetExt) begin
         State <= Wait;
@@ -1225,6 +1229,8 @@ always @ (posedge SysCLK) begin
                      DMPStart <= 1'b0;
                      SendEvtThis <= 1'b0;
                      CmdStrng <= {1'b1,5'b11111,4'b0000,~1'b0,64'd0};   // NOOP to all 12 chips
+                     prevCmd <= Command;
+                     prevDat <= CmdData[0];
                   end
             AddR: begin     //Start of input sequence for serial commands sent from the master board
                      Cnt <= Cnt + 1;
@@ -1645,6 +1651,10 @@ always @ (posedge SysCLK) begin
                                           CalEn <= 1'b1;
                                       end
                                   end
+                          8'h84:  begin
+                                      RegData[1] <= 8'd3;
+                                      lenData <= 4'd3;
+                                  end
                           default: begin
                                        cntError9 <= cntError9 + 1;     // Unrecognized command
                                    end
@@ -1732,6 +1742,9 @@ always @ (posedge SysCLK) begin
                           else CntZ <= 0;
                       end
                       if (NextState == DUMP) DMPStart <= 1'b1;
+                      if (CntTime > 511) begin
+                          ErrorCode2[3] = 1'b1;
+                      end
                       CntTime <= CntTime + 1;
                   end
             RdEv: begin
@@ -1822,6 +1835,7 @@ always @ (posedge SysCLK) begin
                                         endcase
                                      end
                               8'h78: RegData[6] <= {ErrorCode2,ErrorCode1};
+                              8'h84: RegData[6] <= prevCmd;
                           endcase
                       end else if (Cnt == 1) begin
                           case (Command)
@@ -1851,6 +1865,7 @@ always @ (posedge SysCLK) begin
                               8'h76: RegData[7] <= EncStates2;      //Second Byte of state machine status
                               8'h77: RegData[7] <= 8'h0f;
                               8'h78: RegData[7] <= SaveCmd;
+                              8'h84: RegData[7] <= prevDat;
                           endcase
                       end else if (Cnt == 2) begin
                           case (Command)
@@ -1867,6 +1882,7 @@ always @ (posedge SysCLK) begin
                               8'h71: RegData[8] <= 8'h0f;
                               8'h76: RegData[8] <= 8'h0f;
                               8'h78: RegData[8] <= 8'h0f;
+                              8'h84: RegData[8] <= 8'h0f;
                           endcase
                       end
                       if (NextState == RegO) RegOut <= 1'b1;
