@@ -1357,7 +1357,11 @@ always @ (posedge SysCLK) begin
                       CmdCount <= CmdCount + 1;
                       CntEcho <= 0;
                       FrstBt <= 1'b0;
-                      if (Address>4'h7) cntError9 <= cntError9 + 1;
+                      $display("%g\t AESOP_TKR %h: Command %h received for Address %h",$time,BrdAddress,Command,Address);
+                      if (Address>4'h7) begin
+                          cntError9 <= cntError9 + 1;
+                          $display("%g\t AESOP_TKR %h: Bad address %h seen and counted.",$time,BrdAddress, Address);
+                      end
                       case (Command) 
                           8'h01:  begin    // Read Event Command, assumed always to apply to all boards
                                       $display("%g\t AESOP_TKR %h: Read event command received. Data=%b, Tag=%b",$time,BrdAddress,CmdData[0],TrgTag);
@@ -1630,6 +1634,7 @@ always @ (posedge SysCLK) begin
                                       RegData[1] <= 8'd2;
                                       lenData <= 4'd2;
                                       errSel <= CmdData[0];
+                                      $display("%g\t AESOP_TKR %h: Command %h, CmdData=%h",$time,BrdAddress,Command,CmdData[0]);
                                   end
                           8'h78:  begin
                                       RegData[1] <= 8'd3;
@@ -1656,7 +1661,10 @@ always @ (posedge SysCLK) begin
                                       lenData <= 4'd3;
                                   end
                           default: begin
-                                       cntError9 <= cntError9 + 1;     // Unrecognized command
+                                       if (Command!=3 && Command!=4) begin
+                                           cntError9 <= cntError9 + 1;     // Unrecognized command
+                                           $display("%g\t AESOP_TKR %h: Bad command %h seen and counted.",$time,BrdAddress,Command);
+                                       end
                                    end
                       endcase
                   end
@@ -1820,6 +1828,7 @@ always @ (posedge SysCLK) begin
                               8'h75: RegData[6] <= NMissedTg;
                               8'h76: RegData[6] <= EncStates1;      //First Byte of state machine status
                               8'h77: begin
+                                        $display("%g\t AESOP_TKR %h: cmd %h, errSel=%h, cntError9=%h",$time,BrdAddress,Command,errSel,cntError9);
                                         case (errSel)
                                            8'h01: RegData[6] <= cntError1;    // Timeout in RdEv
                                            8'h02: RegData[6] <= cntError2;    // Timeout in RegO or DUMP or Buss
@@ -1863,7 +1872,10 @@ always @ (posedge SysCLK) begin
                               8'h74: RegData[7] <= 8'h0f;
                               8'h75: RegData[7] <= 8'h0f;
                               8'h76: RegData[7] <= EncStates2;      //Second Byte of state machine status
-                              8'h77: RegData[7] <= 8'h0f;
+                              8'h77: begin
+                                        RegData[7] <= 8'h0f;
+                                        //$display("%g\t AESOP_TKR %h: cmd %h, Cnt=%h",$time,BrdAddress,Command,Cnt);
+                                     end
                               8'h78: RegData[7] <= SaveCmd;
                               8'h84: RegData[7] <= prevDat;
                           endcase
