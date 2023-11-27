@@ -19,6 +19,7 @@
 // V99 Reset nEvent for 0x04 command
 // V100 Set the ASIC data delays to fixed, and set all delays to the max of 255
 // V101 Add command 0x84 for debugging purposes
+// V102 Fix reporting of bad commands/addresses
 
  module AESOP_TKR (Debug1, Debug2, Debug3, Debug4, Debug5, Debug6, ResetExt, SysCLK, TxD_start, TxD_data, TxD_busy, RxD_data_ready, RxD_data,
           TrigExt, TrigNextLyr, BrdAddress, ASICpower, CmdIn, CmdNextLyr, DataIn1, DataOut,
@@ -61,7 +62,7 @@ output CalEn;               // enable for CalInc
 output Debug1, Debug2, Debug3, Debug4;
 input  Debug5, Debug6;
 
-parameter [7:0] Version = 8'd101;  
+parameter [7:0] Version = 8'd102;  
 
 reg CalIO;
 reg CalRst;
